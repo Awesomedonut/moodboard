@@ -50,7 +50,7 @@ export function AddItemModal({
             <circle cx="9" cy="9" r="2" />
             <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
           </svg>
-          Choose images or drag them onto the board
+          Choose img
         </button>
 
         <div className="mb-3 flex items-center gap-3">

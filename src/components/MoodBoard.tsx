@@ -133,7 +133,8 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
 
       if (imageFiles.length > 0) {
         event.preventDefault();
-        await uploadFiles(imageFiles, {});
+        setPendingFiles(imageFiles);
+        setCaptions({});
         return;
       }
 
