@@ -1,21 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { put, del, list } from "@vercel/blob";
-
-export interface Board {
-  id: string;
-  name: string;
-  createdAt: string;
-}
-
-export interface BoardItem {
-  id: string;
-  type: "image" | "link" | "youtube";
-  url: string;
-  title: string;
-  caption: string;
-  createdAt: string;
-}
+import type { Board, BoardItem } from "@/lib/types";
 
 const LOCAL_DATA_DIR = path.join(process.cwd(), ".data");
 const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);

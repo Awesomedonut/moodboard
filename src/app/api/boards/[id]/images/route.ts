@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { readItems, writeItems, put, BoardItem } from "@/lib/storage";
+import { readItems, writeItems, put } from "@/lib/storage";
+import type { BoardItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 

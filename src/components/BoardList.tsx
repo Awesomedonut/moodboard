@@ -2,69 +2,55 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-
-interface Board {
-  id: string;
-  name: string;
-  cover: string | null;
-  createdAt: string;
-}
+import { createBoard, deleteBoard, fetchBoards } from "@/lib/boards-client";
+import type { BoardSummary } from "@/lib/types";
 
 export default function BoardList() {
-  const [boards, setBoards] = useState<Board[]>([]);
+  const [boards, setBoards] = useState<BoardSummary[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const fetchBoards = useCallback(async () => {
-    const res = await fetch("/api/boards");
-    if (!res.ok) {
-      throw new Error("Failed to load boards");
-    }
-
-    const data = await res.json();
+  const loadBoards = useCallback(async () => {
+    const data = await fetchBoards();
     setBoards(data);
   }, []);
 
   useEffect(() => {
     void Promise.resolve()
-      .then(fetchBoards)
+      .then(loadBoards)
       .catch(() => setError("Could not load boards."));
-  }, [fetchBoards]);
+  }, [loadBoards]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!newName.trim()) return;
+    const name = newName.trim();
+    if (!name) return;
 
     setError(null);
-
-    const res = await fetch("/api/boards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim() }),
-    });
-
-    if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error || "Could not create board.");
+    try {
+      await createBoard(name);
+      setNewName("");
+      setCreating(false);
+      await loadBoards();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Could not create board."
+      );
       return;
     }
-
-    setNewName("");
-    setCreating(false);
-    await fetchBoards().catch(() => setError("Board created, but refresh failed."));
   }
 
   async function handleDelete(id: string) {
     setError(null);
-
-    const res = await fetch(`/api/boards/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      setError("Could not delete board.");
-      return;
+    try {
+      await deleteBoard(id);
+      await loadBoards();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Could not delete board."
+      );
     }
-
-    await fetchBoards().catch(() => setError("Board deleted, but refresh failed."));
   }
 
   return (
