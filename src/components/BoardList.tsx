@@ -14,35 +14,57 @@ export default function BoardList() {
   const [boards, setBoards] = useState<Board[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchBoards = useCallback(async () => {
     const res = await fetch("/api/boards");
+    if (!res.ok) {
+      throw new Error("Failed to load boards");
+    }
+
     const data = await res.json();
     setBoards(data);
   }, []);
 
   useEffect(() => {
-    fetchBoards();
+    void Promise.resolve()
+      .then(fetchBoards)
+      .catch(() => setError("Could not load boards."));
   }, [fetchBoards]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
 
-    await fetch("/api/boards", {
+    setError(null);
+
+    const res = await fetch("/api/boards", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName.trim() }),
     });
 
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(data?.error || "Could not create board.");
+      return;
+    }
+
     setNewName("");
     setCreating(false);
-    await fetchBoards();
+    await fetchBoards().catch(() => setError("Board created, but refresh failed."));
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/boards/${id}`, { method: "DELETE" });
-    await fetchBoards();
+    setError(null);
+
+    const res = await fetch(`/api/boards/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Could not delete board.");
+      return;
+    }
+
+    await fetchBoards().catch(() => setError("Board deleted, but refresh failed."));
   }
 
   return (
@@ -56,6 +78,12 @@ export default function BoardList() {
           + New Board
         </button>
       </header>
+
+      {error ? (
+        <div className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       {creating && (
         <div

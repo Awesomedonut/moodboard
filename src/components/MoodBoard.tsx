@@ -52,7 +52,7 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
   }, [boardId]);
 
   useEffect(() => {
-    fetchItems();
+    void Promise.resolve().then(fetchItems);
   }, [fetchItems]);
 
   useEffect(() => {
