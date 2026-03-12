@@ -27,6 +27,8 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [editCaptionValue, setEditCaptionValue] = useState("");
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showYoutubeModal, setShowYoutubeModal] = useState(false);
@@ -171,6 +173,18 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
     });
   }
 
+  async function handleSaveCaption() {
+    if (!selectedItem) return;
+    await fetch(`/api/boards/${boardId}/images/${selectedItem.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ caption: editCaptionValue }),
+    });
+    setEditingCaption(false);
+    setSelectedItem({ ...selectedItem, caption: editCaptionValue });
+    await fetchItems();
+  }
+
   async function handleDelete(id: string) {
     await fetch(`/api/boards/${boardId}/images/${id}`, { method: "DELETE" });
     setSelectedItem(null);
@@ -279,6 +293,17 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
           </Link>
           <h1 className="text-xl font-semibold tracking-tight">Board</h1>
         </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/boards/${boardId}/download`}
+            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </a>
         <div className="relative" ref={addMenuRef}>
           <button
             onClick={() => setShowAddMenu(!showAddMenu)}
@@ -319,6 +344,7 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
               </button>
             </div>
           )}
+        </div>
         </div>
       </header>
 
@@ -527,7 +553,7 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
       {selectedItem && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={() => setSelectedItem(null)}
+          onClick={() => { setSelectedItem(null); setEditingCaption(false); }}
         >
           <div
             className="relative max-h-[90vh] max-w-[90vw]"
@@ -539,18 +565,47 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
                 <p className="text-sm text-white/70">
                   {selectedItem.title}
                 </p>
-                <button
-                  onClick={() => handleDelete(selectedItem.id)}
-                  className="rounded-md bg-red-600 px-3 py-1 text-sm text-white transition-colors hover:bg-red-500"
-                >
-                  Delete
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingCaption(true);
+                      setEditCaptionValue(selectedItem.caption);
+                    }}
+                    className="rounded-md bg-white/10 px-3 py-1 text-sm text-white transition-colors hover:bg-white/20"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(selectedItem.id)}
+                    className="rounded-md bg-red-600 px-3 py-1 text-sm text-white transition-colors hover:bg-red-500"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              {selectedItem.caption && (
+              {editingCaption ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editCaptionValue}
+                    onChange={(e) => setEditCaptionValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveCaption(); }}
+                    autoFocus
+                    placeholder="Caption"
+                    className="flex-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-sm text-white outline-none focus:border-white/40"
+                  />
+                  <button
+                    onClick={handleSaveCaption}
+                    className="rounded-md bg-white/20 px-3 py-1 text-sm text-white transition-colors hover:bg-white/30"
+                  >
+                    Save
+                  </button>
+                </div>
+              ) : selectedItem.caption ? (
                 <p className="text-sm text-white/50">
                   {selectedItem.caption}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
 
