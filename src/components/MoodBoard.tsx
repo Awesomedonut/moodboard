@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 
 interface ImageEntry {
   id: string;
@@ -9,16 +10,16 @@ interface ImageEntry {
   createdAt: string;
 }
 
-export default function MoodBoard() {
+export default function MoodBoard({ boardId }: { boardId: string }) {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const fetchImages = useCallback(async () => {
-    const res = await fetch("/api/images");
+    const res = await fetch(`/api/boards/${boardId}/images`);
     const data = await res.json();
     setImages(data);
-  }, []);
+  }, [boardId]);
 
   useEffect(() => {
     fetchImages();
@@ -43,7 +44,7 @@ export default function MoodBoard() {
       formData.append("file", file);
       formData.append("title", file.name.replace(/\.[^.]+$/, ""));
 
-      await fetch("/api/images", {
+      await fetch(`/api/boards/${boardId}/images`, {
         method: "POST",
         body: formData,
       });
@@ -55,7 +56,7 @@ export default function MoodBoard() {
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/images/${id}`, { method: "DELETE" });
+    await fetch(`/api/boards/${boardId}/images/${id}`, { method: "DELETE" });
     setSelectedImage(null);
     await fetchImages();
   }
@@ -63,7 +64,27 @@ export default function MoodBoard() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-6 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-        <h1 className="text-xl font-semibold tracking-tight">Moodboard</h1>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="rounded-md p-1 text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </Link>
+          <h1 className="text-xl font-semibold tracking-tight">Board</h1>
+        </div>
         <label className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300">
           {uploading ? "Uploading..." : "+ Add Images"}
           <input
@@ -98,7 +119,7 @@ export default function MoodBoard() {
           <p className="text-sm">Click &quot;+ Add Images&quot; to get started</p>
         </div>
       ) : (
-        <div className="columns-2 gap-4 p-6 sm:columns-3 md:columns-4 lg:columns-5">
+        <div className="columns-1 gap-6 p-6 sm:columns-1 md:columns-2 lg:columns-3">
           {images.map((img) => (
             <button
               key={img.id}
@@ -106,7 +127,7 @@ export default function MoodBoard() {
               className="mb-4 block w-full overflow-hidden rounded-lg transition-shadow hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-zinc-400"
             >
               <img
-                src={`/uploads/${img.filename}`}
+                src={`/api/uploads/${img.filename}`}
                 alt={img.title}
                 className="w-full object-cover"
                 loading="lazy"
@@ -126,7 +147,7 @@ export default function MoodBoard() {
             onClick={(e) => e.stopPropagation()}
           >
             <img
-              src={`/uploads/${selectedImage.filename}`}
+              src={`/api/uploads/${selectedImage.filename}`}
               alt={selectedImage.title}
               className="max-h-[85vh] max-w-full rounded-lg object-contain"
             />

@@ -1,5 +1,5 @@
-import MoodBoard from "@/components/MoodBoard";
+import BoardList from "@/components/BoardList";
 
 export default function Home() {
-  return <MoodBoard />;
+  return <BoardList />;
 }
