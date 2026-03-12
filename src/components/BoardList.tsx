@@ -127,7 +127,7 @@ export default function BoardList() {
                 <div className="aspect-[4/3] w-full bg-zinc-100 dark:bg-zinc-800">
                   {board.cover ? (
                     <img
-                      src={`/api/uploads/${board.cover}`}
+                      src={board.cover}
                       alt={board.name}
                       className="h-full w-full object-cover"
                     />

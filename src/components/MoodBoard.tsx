@@ -5,8 +5,9 @@ import Link from "next/link";
 
 interface ImageEntry {
   id: string;
-  filename: string;
+  url: string;
   title: string;
+  caption: string;
   createdAt: string;
 }
 
@@ -14,6 +15,10 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
   const [images, setImages] = useState<ImageEntry[]>([]);
   const [selectedImage, setSelectedImage] = useState<ImageEntry | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const fetchImages = useCallback(async () => {
     const res = await fetch(`/api/boards/${boardId}/images`);
@@ -33,16 +38,22 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    setPendingFiles(Array.from(files));
+    setCaptions({});
+    e.target.value = "";
+  }
 
+  async function handleConfirmUpload() {
     setUploading(true);
 
-    for (const file of Array.from(files)) {
+    for (const file of pendingFiles) {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", file.name.replace(/\.[^.]+$/, ""));
+      formData.append("caption", captions[file.name] || "");
 
       await fetch(`/api/boards/${boardId}/images`, {
         method: "POST",
@@ -50,9 +61,43 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
       });
     }
 
-    e.target.value = "";
+    setPendingFiles([]);
+    setCaptions({});
     await fetchImages();
     setUploading(false);
+  }
+
+  function handleDragStart(id: string) {
+    setDragId(id);
+  }
+
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    if (id !== dragId) setDragOverId(id);
+  }
+
+  async function handleDrop(targetId: string) {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      setDragOverId(null);
+      return;
+    }
+
+    const oldIndex = images.findIndex((img) => img.id === dragId);
+    const newIndex = images.findIndex((img) => img.id === targetId);
+    const reordered = [...images];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+
+    setImages(reordered);
+    setDragId(null);
+    setDragOverId(null);
+
+    await fetch(`/api/boards/${boardId}/images`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order: reordered.map((img) => img.id) }),
+    });
   }
 
   async function handleDelete(id: string) {
@@ -91,7 +136,7 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
             type="file"
             accept="image/*"
             multiple
-            onChange={handleUpload}
+            onChange={handleFileSelect}
             className="hidden"
             disabled={uploading}
           />
@@ -119,21 +164,92 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
           <p className="text-sm">Click &quot;+ Add Images&quot; to get started</p>
         </div>
       ) : (
-        <div className="columns-1 gap-6 p-6 sm:columns-1 md:columns-2 lg:columns-3">
+        <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-3">
           {images.map((img) => (
-            <button
+            <div
               key={img.id}
-              onClick={() => setSelectedImage(img)}
-              className="mb-4 block w-full overflow-hidden rounded-lg transition-shadow hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              draggable
+              onDragStart={() => handleDragStart(img.id)}
+              onDragOver={(e) => handleDragOver(e, img.id)}
+              onDrop={() => handleDrop(img.id)}
+              onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+              className={`cursor-grab active:cursor-grabbing ${
+                dragId === img.id ? "opacity-40" : ""
+              } ${
+                dragOverId === img.id ? "ring-2 ring-zinc-400 rounded-lg" : ""
+              }`}
             >
-              <img
-                src={`/api/uploads/${img.filename}`}
-                alt={img.title}
-                className="w-full object-cover"
-                loading="lazy"
-              />
-            </button>
+              <button
+                onClick={() => setSelectedImage(img)}
+                className="block w-full overflow-hidden rounded-lg bg-white transition-shadow hover:shadow-lg focus:outline-none dark:bg-zinc-900"
+              >
+                <img
+                  src={img.url}
+                  alt={img.title}
+                  className="w-full object-cover"
+                  loading="lazy"
+                />
+                {img.caption && (
+                  <p className="px-3 py-2 text-left text-sm text-zinc-500 dark:text-zinc-400">
+                    {img.caption}
+                  </p>
+                )}
+              </button>
+            </div>
           ))}
+        </div>
+      )}
+
+      {pendingFiles.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setPendingFiles([])}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl bg-white p-6 dark:bg-zinc-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="mb-4 text-lg font-semibold">Add Captions</h2>
+            <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+              {pendingFiles.map((file) => (
+                <div key={file.name} className="flex items-start gap-3">
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt={file.name}
+                    className="h-16 w-16 shrink-0 rounded-md object-cover"
+                  />
+                  <div className="flex-1">
+                    <p className="mb-1 text-sm font-medium">{file.name}</p>
+                    <input
+                      type="text"
+                      placeholder="Caption (optional)"
+                      value={captions[file.name] || ""}
+                      onChange={(e) =>
+                        setCaptions((prev) => ({ ...prev, [file.name]: e.target.value }))
+                      }
+                      className="w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingFiles([])}
+                className="rounded-lg px-4 py-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmUpload}
+                disabled={uploading}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+              >
+                {uploading ? "Uploading..." : "Upload"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -147,20 +263,27 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
             onClick={(e) => e.stopPropagation()}
           >
             <img
-              src={`/api/uploads/${selectedImage.filename}`}
+              src={selectedImage.url}
               alt={selectedImage.title}
               className="max-h-[85vh] max-w-full rounded-lg object-contain"
             />
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-sm text-white/70">
-                {selectedImage.title}
-              </p>
-              <button
-                onClick={() => handleDelete(selectedImage.id)}
-                className="rounded-md bg-red-600 px-3 py-1 text-sm text-white transition-colors hover:bg-red-500"
-              >
-                Delete
-              </button>
+            <div className="mt-3 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-white/70">
+                  {selectedImage.title}
+                </p>
+                <button
+                  onClick={() => handleDelete(selectedImage.id)}
+                  className="rounded-md bg-red-600 px-3 py-1 text-sm text-white transition-colors hover:bg-red-500"
+                >
+                  Delete
+                </button>
+              </div>
+              {selectedImage.caption && (
+                <p className="text-sm text-white/50">
+                  {selectedImage.caption}
+                </p>
+              )}
             </div>
           </div>
 
