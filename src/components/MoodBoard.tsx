@@ -19,6 +19,15 @@ function getYouTubeId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+function isUrl(text: string): boolean {
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export default function MoodBoard({ boardId }: { boardId: string }) {
   const [items, setItems] = useState<BoardItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<BoardItem | null>(null);
@@ -29,15 +38,12 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [editingCaption, setEditingCaption] = useState(false);
   const [editCaptionValue, setEditCaptionValue] = useState("");
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [showYoutubeModal, setShowYoutubeModal] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const [linkTitle, setLinkTitle] = useState("");
-  const [linkCaption, setLinkCaption] = useState("");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [youtubeCaption, setYoutubeCaption] = useState("");
-  const addMenuRef = useRef<HTMLDivElement>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addUrl, setAddUrl] = useState("");
+  const [addCaption, setAddCaption] = useState("");
+  const [addTitle, setAddTitle] = useState("");
+  const [dropActive, setDropActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchItems = useCallback(async () => {
     const res = await fetch(`/api/boards/${boardId}/images`);
@@ -51,92 +57,109 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelectedItem(null);
+      if (e.key === "Escape") {
+        setSelectedItem(null);
+        setShowAddModal(false);
+      }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  async function uploadFile(file: File, caption = "") {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("title", file.name.replace(/\.[^.]+$/, ""));
+    formData.append("caption", caption);
+    await fetch(`/api/boards/${boardId}/images`, {
+      method: "POST",
+      body: formData,
+    });
+  }
+
+  async function addUrlItem(url: string, title: string, caption: string) {
+    const type = getYouTubeId(url) ? "youtube" : "link";
+    await fetch(`/api/boards/${boardId}/images`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, url, title: title || url, caption }),
+    });
+  }
+
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setShowAddMenu(false);
+    async function handlePaste(e: ClipboardEvent) {
+      if (showAddModal || selectedItem || pendingFiles.length > 0) return;
+
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems) return;
+
+      const imageFiles: File[] = [];
+      let textData = "";
+
+      for (const item of Array.from(clipboardItems)) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        } else if (item.type === "text/plain") {
+          textData = await new Promise<string>((resolve) => item.getAsString(resolve));
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        setUploading(true);
+        for (const file of imageFiles) {
+          await uploadFile(file);
+        }
+        await fetchItems();
+        setUploading(false);
+        return;
+      }
+
+      if (textData.trim() && isUrl(textData.trim())) {
+        e.preventDefault();
+        const url = textData.trim();
+        await addUrlItem(url, "", "");
+        await fetchItems();
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [boardId, showAddModal, selectedItem, pendingFiles.length, fetchItems]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setPendingFiles(Array.from(files));
     setCaptions({});
-    setShowAddMenu(false);
+    setShowAddModal(false);
     e.target.value = "";
   }
 
   async function handleConfirmUpload() {
     setUploading(true);
-
     for (const file of pendingFiles) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", file.name.replace(/\.[^.]+$/, ""));
-      formData.append("caption", captions[file.name] || "");
-
-      await fetch(`/api/boards/${boardId}/images`, {
-        method: "POST",
-        body: formData,
-      });
+      await uploadFile(file, captions[file.name] || "");
     }
-
     setPendingFiles([]);
     setCaptions({});
     await fetchItems();
     setUploading(false);
   }
 
-  async function handleAddLink(e: React.FormEvent) {
+  async function handleAddUrl(e: React.FormEvent) {
     e.preventDefault();
-    if (!linkUrl.trim()) return;
+    if (!addUrl.trim()) return;
+    const url = addUrl.trim();
 
-    await fetch(`/api/boards/${boardId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "link",
-        url: linkUrl.trim(),
-        title: linkTitle.trim() || linkUrl.trim(),
-        caption: linkCaption.trim(),
-      }),
-    });
+    if (!isUrl(url)) return;
 
-    setLinkUrl("");
-    setLinkTitle("");
-    setLinkCaption("");
-    setShowLinkModal(false);
-    await fetchItems();
-  }
-
-  async function handleAddYoutube(e: React.FormEvent) {
-    e.preventDefault();
-    if (!youtubeUrl.trim() || !getYouTubeId(youtubeUrl)) return;
-
-    await fetch(`/api/boards/${boardId}/images`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "youtube",
-        url: youtubeUrl.trim(),
-        title: "",
-        caption: youtubeCaption.trim(),
-      }),
-    });
-
-    setYoutubeUrl("");
-    setYoutubeCaption("");
-    setShowYoutubeModal(false);
+    await addUrlItem(url, addTitle.trim(), addCaption.trim());
+    setAddUrl("");
+    setAddTitle("");
+    setAddCaption("");
+    setShowAddModal(false);
     await fetchItems();
   }
 
@@ -171,6 +194,30 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ order: reordered.map((item) => item.id) }),
     });
+  }
+
+  function handleBoardDragOver(e: React.DragEvent) {
+    if (dragId) return;
+    e.preventDefault();
+    setDropActive(true);
+  }
+
+  function handleBoardDragLeave(e: React.DragEvent) {
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDropActive(false);
+    }
+  }
+
+  async function handleBoardDrop(e: React.DragEvent) {
+    if (dragId) return;
+    e.preventDefault();
+    setDropActive(false);
+
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+    if (files.length > 0) {
+      setPendingFiles(files);
+      setCaptions({});
+    }
   }
 
   async function handleSaveCaption() {
@@ -279,8 +326,17 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
     );
   }
 
+  const detectedType = addUrl.trim() && isUrl(addUrl.trim())
+    ? getYouTubeId(addUrl.trim()) ? "YouTube video" : "Link"
+    : null;
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div
+      className={`min-h-screen bg-zinc-50 dark:bg-zinc-950 ${dropActive ? "ring-4 ring-inset ring-blue-400" : ""}`}
+      onDragOver={handleBoardDragOver}
+      onDragLeave={handleBoardDragLeave}
+      onDrop={handleBoardDrop}
+    >
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-6 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
         <div className="flex items-center gap-3">
           <Link
@@ -304,51 +360,22 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
           </a>
-        <div className="relative" ref={addMenuRef}>
           <button
-            onClick={() => setShowAddMenu(!showAddMenu)}
+            onClick={() => setShowAddModal(true)}
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
           >
             + Add
           </button>
-          {showAddMenu && (
-            <div className="absolute right-0 top-full mt-2 w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-              <label className="flex w-full cursor-pointer items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                </svg>
-                Images
-                <input type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" disabled={uploading} />
-              </label>
-              <button
-                onClick={() => { setShowLinkModal(true); setShowAddMenu(false); }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-                Link
-              </button>
-              <button
-                onClick={() => { setShowYoutubeModal(true); setShowAddMenu(false); }}
-                className="flex w-full items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
-                  <path d="m10 15 5-3-5-3z" />
-                </svg>
-                YouTube
-              </button>
-            </div>
-          )}
-        </div>
         </div>
       </header>
 
-      {items.length === 0 ? (
+      {uploading && (
+        <div className="border-b border-zinc-200 bg-blue-50 px-6 py-2 text-center text-sm text-blue-600 dark:border-zinc-800 dark:bg-blue-950 dark:text-blue-400">
+          Uploading...
+        </div>
+      )}
+
+      {items.length === 0 && !uploading ? (
         <div className="flex flex-col items-center justify-center gap-3 py-32 text-zinc-400">
           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
@@ -356,7 +383,7 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
             <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
           </svg>
           <p className="text-lg">Nothing here yet</p>
-          <p className="text-sm">Click &quot;+ Add&quot; to get started</p>
+          <p className="text-sm">Paste an image or URL, drag files in, or click &quot;+ Add&quot;</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-3">
@@ -387,6 +414,99 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {showAddModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setShowAddModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-white p-6 dark:bg-zinc-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="mb-4 text-lg font-semibold">Add to Board</h2>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-zinc-300 px-4 py-6 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:hover:border-zinc-500 dark:hover:text-zinc-300"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+              </svg>
+              Choose images or drag them onto the board
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            <div className="mb-3 flex items-center gap-3">
+              <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+              <span className="text-xs text-zinc-400">or paste a URL</span>
+              <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+            </div>
+
+            <form onSubmit={handleAddUrl}>
+              <input
+                type="text"
+                value={addUrl}
+                onChange={(e) => setAddUrl(e.target.value)}
+                placeholder="https://..."
+                autoFocus
+                className="mb-2 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
+              />
+              {detectedType && (
+                <p className="mb-2 text-xs text-zinc-400">
+                  Detected: {detectedType}
+                </p>
+              )}
+              {addUrl && getYouTubeId(addUrl) && (
+                <img
+                  src={`https://img.youtube.com/vi/${getYouTubeId(addUrl)}/hqdefault.jpg`}
+                  alt="Preview"
+                  className="mb-2 w-full rounded-lg"
+                />
+              )}
+              <input
+                type="text"
+                value={addTitle}
+                onChange={(e) => setAddTitle(e.target.value)}
+                placeholder="Title (optional)"
+                className="mb-2 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
+              />
+              <input
+                type="text"
+                value={addCaption}
+                onChange={(e) => setAddCaption(e.target.value)}
+                placeholder="Caption (optional)"
+                className="mb-4 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-lg px-4 py-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!detectedType}
+                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -440,113 +560,6 @@ export default function MoodBoard({ boardId }: { boardId: string }) {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {showLinkModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={() => setShowLinkModal(false)}
-        >
-          <form
-            onSubmit={handleAddLink}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl bg-white p-6 dark:bg-zinc-900"
-          >
-            <h2 className="mb-4 text-lg font-semibold">Add Link</h2>
-            <input
-              type="url"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://..."
-              required
-              autoFocus
-              className="mb-3 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
-            />
-            <input
-              type="text"
-              value={linkTitle}
-              onChange={(e) => setLinkTitle(e.target.value)}
-              placeholder="Title (optional)"
-              className="mb-3 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
-            />
-            <input
-              type="text"
-              value={linkCaption}
-              onChange={(e) => setLinkCaption(e.target.value)}
-              placeholder="Caption (optional)"
-              className="mb-4 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowLinkModal(false)}
-                className="rounded-lg px-4 py-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-              >
-                Add
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {showYoutubeModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={() => setShowYoutubeModal(false)}
-        >
-          <form
-            onSubmit={handleAddYoutube}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl bg-white p-6 dark:bg-zinc-900"
-          >
-            <h2 className="mb-4 text-lg font-semibold">Add YouTube Video</h2>
-            <input
-              type="url"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=..."
-              required
-              autoFocus
-              className="mb-3 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
-            />
-            {youtubeUrl && getYouTubeId(youtubeUrl) && (
-              <img
-                src={`https://img.youtube.com/vi/${getYouTubeId(youtubeUrl)}/hqdefault.jpg`}
-                alt="Preview"
-                className="mb-3 w-full rounded-lg"
-              />
-            )}
-            <input
-              type="text"
-              value={youtubeCaption}
-              onChange={(e) => setYoutubeCaption(e.target.value)}
-              placeholder="Caption (optional)"
-              className="mb-4 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowYoutubeModal(false)}
-                className="rounded-lg px-4 py-2 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!youtubeUrl || !getYouTubeId(youtubeUrl)}
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-              >
-                Add
-              </button>
-            </div>
-          </form>
         </div>
       )}
 
