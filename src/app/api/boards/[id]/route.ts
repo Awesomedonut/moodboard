@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readBoards, writeBoards, readItems, deleteMetaBlob, del } from "@/lib/storage";
+import { readBoards, readItems, deleteBoardMeta, del } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +21,7 @@ export async function DELETE(
       await del(item.url);
     }
   }
-  await deleteMetaBlob(`meta/board-${id}.json`);
-
-  const updated = boards.filter((b) => b.id !== id);
-  await writeBoards(updated);
+  await deleteBoardMeta(id);
 
   return NextResponse.json({ success: true });
 }

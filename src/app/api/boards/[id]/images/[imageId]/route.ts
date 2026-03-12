@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readItems, writeItems, del } from "@/lib/storage";
+import { deleteBoardItemMeta, readItems, updateBoardItem, del } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export async function PATCH(
   }
 
   entry.caption = caption ?? entry.caption;
-  await writeItems(id, items);
+  await updateBoardItem(id, entry);
 
   return NextResponse.json(entry);
 }
@@ -38,8 +38,7 @@ export async function DELETE(
     await del(entry.url);
   }
 
-  const updated = items.filter((item) => item.id !== imageId);
-  await writeItems(id, updated);
+  await deleteBoardItemMeta(id, imageId);
 
   return NextResponse.json({ success: true });
 }

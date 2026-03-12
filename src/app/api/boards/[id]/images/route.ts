@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { readItems, writeItems, put } from "@/lib/storage";
+import { createBoardItem, put, readItems, writeItemOrder } from "@/lib/storage";
 import type { BoardItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export async function PUT(
     .map((itemId: string) => itemMap.get(itemId))
     .filter(Boolean) as BoardItem[];
 
-  await writeItems(id, reordered);
+  await writeItemOrder(id, reordered.map((item) => item.id));
   return NextResponse.json(reordered);
 }
 
@@ -78,9 +78,7 @@ export async function POST(
     };
   }
 
-  const items = await readItems(id);
-  items.push(entry);
-  await writeItems(id, items);
+  await createBoardItem(id, entry);
 
   return NextResponse.json(entry, { status: 201 });
 }

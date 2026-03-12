@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { readBoards, writeBoards, readItems } from "@/lib/storage";
+import { createBoard, readBoards, readItems } from "@/lib/storage";
 import type { Board } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -43,9 +43,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    const boards = await readBoards();
-    boards.push(board);
-    await writeBoards(boards);
+    await createBoard(board);
 
     return NextResponse.json(board, { status: 201 });
   } catch (error) {
