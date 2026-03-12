@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readImages, writeImages, del } from "@/lib/storage";
+import { readItems, writeItems, del } from "@/lib/storage";
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; imageId: string }> }
 ) {
   const { id, imageId } = await params;
-  const images = await readImages(id);
-  const entry = images.find((img) => img.id === imageId);
+  const items = await readItems(id);
+  const entry = items.find((item) => item.id === imageId);
 
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await del(entry.url);
+  if (entry.type === "image") {
+    await del(entry.url);
+  }
 
-  const updated = images.filter((img) => img.id !== imageId);
-  await writeImages(id, updated);
+  const updated = items.filter((item) => item.id !== imageId);
+  await writeItems(id, updated);
 
   return NextResponse.json({ success: true });
 }

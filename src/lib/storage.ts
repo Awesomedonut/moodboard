@@ -6,8 +6,9 @@ export interface Board {
   createdAt: string;
 }
 
-export interface ImageEntry {
+export interface BoardItem {
   id: string;
+  type: "image" | "link" | "youtube";
   url: string;
   title: string;
   caption: string;
@@ -41,12 +42,12 @@ export async function writeBoards(boards: Board[]): Promise<void> {
   await writeJson("meta/boards.json", boards);
 }
 
-export async function readImages(boardId: string): Promise<ImageEntry[]> {
-  return readJson<ImageEntry[]>(`meta/board-${boardId}.json`, []);
+export async function readItems(boardId: string): Promise<BoardItem[]> {
+  return readJson<BoardItem[]>(`meta/board-${boardId}.json`, []);
 }
 
-export async function writeImages(boardId: string, images: ImageEntry[]): Promise<void> {
-  await writeJson(`meta/board-${boardId}.json`, images);
+export async function writeItems(boardId: string, items: BoardItem[]): Promise<void> {
+  await writeJson(`meta/board-${boardId}.json`, items);
 }
 
 export async function deleteMetaBlob(path: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readBoards, writeBoards, readImages, deleteMetaBlob, del } from "@/lib/storage";
+import { readBoards, writeBoards, readItems, deleteMetaBlob, del } from "@/lib/storage";
 
 export async function DELETE(
   _req: NextRequest,
@@ -13,9 +13,11 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const images = await readImages(id);
-  for (const img of images) {
-    await del(img.url);
+  const items = await readItems(id);
+  for (const item of items) {
+    if (item.type === "image") {
+      await del(item.url);
+    }
   }
   await deleteMetaBlob(`meta/board-${id}.json`);
 

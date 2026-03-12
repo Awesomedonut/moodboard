@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { readImages, writeImages, put, ImageEntry } from "@/lib/storage";
+import { readItems, writeItems, put, BoardItem } from "@/lib/storage";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const images = await readImages(id);
-  return NextResponse.json(images);
+  const items = await readItems(id);
+  return NextResponse.json(items);
 }
 
 export async function PUT(
@@ -17,14 +17,14 @@ export async function PUT(
 ) {
   const { id } = await params;
   const { order } = await req.json();
-  const images = await readImages(id);
+  const items = await readItems(id);
 
-  const imageMap = new Map(images.map((img) => [img.id, img]));
+  const itemMap = new Map(items.map((item) => [item.id, item]));
   const reordered = (order as string[])
-    .map((imgId: string) => imageMap.get(imgId))
-    .filter(Boolean) as ImageEntry[];
+    .map((itemId: string) => itemMap.get(itemId))
+    .filter(Boolean) as BoardItem[];
 
-  await writeImages(id, reordered);
+  await writeItems(id, reordered);
   return NextResponse.json(reordered);
 }
 
@@ -33,33 +33,51 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const formData = await req.formData();
-  const file = formData.get("file") as File | null;
-  const title = (formData.get("title") as string) || "";
-  const caption = (formData.get("caption") as string) || "";
+  const contentType = req.headers.get("content-type") || "";
 
-  if (!file) {
-    return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  let entry: BoardItem;
+
+  if (contentType.includes("application/json")) {
+    const { type, url, title, caption } = await req.json();
+
+    entry = {
+      id: randomUUID(),
+      type,
+      url,
+      title: title || "",
+      caption: caption || "",
+      createdAt: new Date().toISOString(),
+    };
+  } else {
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const title = (formData.get("title") as string) || "";
+    const caption = (formData.get("caption") as string) || "";
+
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+
+    const imageId = randomUUID();
+    const ext = file.name.split(".").pop() || "png";
+    const blob = await put(`images/${imageId}.${ext}`, file, {
+      access: "public",
+      addRandomSuffix: false,
+    });
+
+    entry = {
+      id: imageId,
+      type: "image",
+      url: blob.url,
+      title,
+      caption,
+      createdAt: new Date().toISOString(),
+    };
   }
 
-  const imageId = randomUUID();
-  const ext = file.name.split(".").pop() || "png";
-  const blob = await put(`images/${imageId}.${ext}`, file, {
-    access: "public",
-    addRandomSuffix: false,
-  });
-
-  const entry: ImageEntry = {
-    id: imageId,
-    url: blob.url,
-    title,
-    caption,
-    createdAt: new Date().toISOString(),
-  };
-
-  const images = await readImages(id);
-  images.push(entry);
-  await writeImages(id, images);
+  const items = await readItems(id);
+  items.push(entry);
+  await writeItems(id, items);
 
   return NextResponse.json(entry, { status: 201 });
 }

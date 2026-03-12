@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { readBoards, writeBoards, readImages, Board } from "@/lib/storage";
+import { readBoards, writeBoards, readItems, Board } from "@/lib/storage";
 
 export async function GET() {
   const boards = await readBoards();
 
   const boardsWithCover = await Promise.all(
     boards.map(async (board) => {
-      const images = await readImages(board.id);
-      const cover = images.length > 0 ? images[0].url : null;
+      const items = await readItems(board.id);
+      const firstImage = items.find((i) => i.type === "image");
+      const cover = firstImage ? firstImage.url : null;
       return { ...board, cover };
     })
   );
