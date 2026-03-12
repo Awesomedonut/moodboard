@@ -19,14 +19,11 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   const { blobs } = await list({ prefix: path });
   const match = blobs.find((b) => b.pathname === path);
   if (!match) return fallback;
-  const res = await fetch(match.url);
+  const res = await fetch(match.url, { cache: "no-store" });
   return res.json();
 }
 
 async function writeJson(path: string, data: unknown): Promise<void> {
-  const { blobs } = await list({ prefix: path });
-  const existing = blobs.find((b) => b.pathname === path);
-  if (existing) await del(existing.url);
   await put(path, JSON.stringify(data), {
     access: "public",
     contentType: "application/json",
