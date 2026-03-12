@@ -5,6 +5,16 @@ import type { BoardItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+function getFileExtension(file: File): string {
+  const fileNameExtension = file.name.split(".").pop();
+  if (fileNameExtension && fileNameExtension !== file.name) {
+    return fileNameExtension;
+  }
+
+  const mimeSubtype = file.type.split("/")[1];
+  return mimeSubtype || "png";
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -62,7 +72,7 @@ export async function POST(
     }
 
     const imageId = randomUUID();
-    const ext = file.name.split(".").pop() || "png";
+    const ext = getFileExtension(file);
     const blob = await put(`images/${imageId}.${ext}`, file, {
       access: "public",
       addRandomSuffix: false,
@@ -72,7 +82,7 @@ export async function POST(
       id: imageId,
       type: "image",
       url: blob.url,
-      title,
+      title: title || "Image",
       caption,
       createdAt: new Date().toISOString(),
     };

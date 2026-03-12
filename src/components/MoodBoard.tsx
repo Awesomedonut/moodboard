@@ -44,7 +44,6 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
   } = useBoardItems(boardId);
 
   const [addCaption, setAddCaption] = useState("");
-  const [addTitle, setAddTitle] = useState("");
   const [addUrl, setAddUrl] = useState("");
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [dragId, setDragId] = useState<string | null>(null);
@@ -64,7 +63,6 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
 
   const resetAddForm = useCallback(() => {
     setAddUrl("");
-    setAddTitle("");
     setAddCaption("");
   }, []);
 
@@ -91,25 +89,39 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeSelectedItem]);
 
+  function createClipboardImageFile(file: File): File {
+    if (file.name) {
+      return file;
+    }
+
+    const extension = file.type.split("/")[1] || "png";
+    return new File([file], `pasted-image-${Date.now()}.${extension}`, {
+      type: file.type || "image/png",
+      lastModified: Date.now(),
+    });
+  }
+
   useEffect(() => {
     async function handlePaste(event: ClipboardEvent) {
       if (showAddModal || selectedItem || pendingFiles.length > 0) {
         return;
       }
 
-      const clipboardItems = event.clipboardData?.items;
-      if (!clipboardItems) {
+      const clipboardData = event.clipboardData;
+      if (!clipboardData) {
         return;
       }
 
-      const imageFiles: File[] = [];
+      const imageFiles: File[] = Array.from(clipboardData.files)
+        .filter((file) => file.type.startsWith("image/"))
+        .map(createClipboardImageFile);
       let textData = "";
 
-      for (const item of Array.from(clipboardItems)) {
+      for (const item of Array.from(clipboardData.items)) {
         if (item.type.startsWith("image/")) {
           const file = item.getAsFile();
-          if (file) {
-            imageFiles.push(file);
+          if (file && imageFiles.every((existingFile) => existingFile.size !== file.size)) {
+            imageFiles.push(createClipboardImageFile(file));
           }
           continue;
         }
@@ -131,7 +143,7 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
       }
 
       event.preventDefault();
-      await addUrlItem(url, "", "");
+      await addUrlItem(url, "");
     }
 
     window.addEventListener("paste", handlePaste);
@@ -164,7 +176,7 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
       return;
     }
 
-    await addUrlItem(url, addTitle.trim(), addCaption.trim());
+    await addUrlItem(url, addCaption.trim());
     resetAddForm();
     setShowAddModal(false);
   }
@@ -339,14 +351,12 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
 
       <AddItemModal
         addCaption={addCaption}
-        addTitle={addTitle}
         addUrl={addUrl}
         isOpen={showAddModal}
         onAddUrl={handleAddUrl}
         onCaptionChange={setAddCaption}
         onClose={() => setShowAddModal(false)}
         onOpenFilePicker={() => fileInputRef.current?.click()}
-        onTitleChange={setAddTitle}
         onUrlChange={setAddUrl}
       />
 

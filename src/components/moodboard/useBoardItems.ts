@@ -35,9 +35,9 @@ export function useBoardItems(boardId: string) {
   }, []);
 
   const addUrlItem = useCallback(
-    async (url: string, title: string, caption: string) => {
+    async (url: string, caption: string) => {
       await withErrorHandling(async () => {
-        await createBoardUrlItem(boardId, url, title, caption);
+        await createBoardUrlItem(boardId, url, caption);
         await refreshItems();
       });
     },

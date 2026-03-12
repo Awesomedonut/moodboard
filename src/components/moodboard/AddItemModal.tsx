@@ -4,27 +4,23 @@ import { getDetectedTypeLabel, getYouTubeThumbnailUrl } from "@/lib/media";
 
 interface AddItemModalProps {
   addCaption: string;
-  addTitle: string;
   addUrl: string;
   isOpen: boolean;
   onAddUrl: (event: React.FormEvent) => void;
   onCaptionChange: (value: string) => void;
   onClose: () => void;
   onOpenFilePicker: () => void;
-  onTitleChange: (value: string) => void;
   onUrlChange: (value: string) => void;
 }
 
 export function AddItemModal({
   addCaption,
-  addTitle,
   addUrl,
   isOpen,
   onAddUrl,
   onCaptionChange,
   onClose,
   onOpenFilePicker,
-  onTitleChange,
   onUrlChange,
 }: AddItemModalProps) {
   if (!isOpen) {
@@ -82,13 +78,6 @@ export function AddItemModal({
               className="mb-2 w-full rounded-lg"
             />
           ) : null}
-          <input
-            type="text"
-            value={addTitle}
-            onChange={(event) => onTitleChange(event.target.value)}
-            placeholder="Title (optional)"
-            className="mb-2 w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:focus:border-zinc-500"
-          />
           <input
             type="text"
             value={addCaption}

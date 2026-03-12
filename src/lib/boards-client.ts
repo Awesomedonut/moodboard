@@ -32,7 +32,7 @@ export async function fetchBoardItems(boardId: string): Promise<BoardItem[]> {
 export async function uploadBoardImage(boardId: string, file: File, caption = ""): Promise<BoardItem> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("title", file.name.replace(/\.[^.]+$/, ""));
+  formData.append("title", file.name.replace(/\.[^.]+$/, "") || "Image");
   formData.append("caption", caption);
 
   const response = await fetch(`/api/boards/${boardId}/images`, {
@@ -46,7 +46,6 @@ export async function uploadBoardImage(boardId: string, file: File, caption = ""
 export async function createBoardUrlItem(
   boardId: string,
   url: string,
-  title: string,
   caption: string
 ): Promise<BoardItem> {
   const type = detectItemType(url);
@@ -58,7 +57,7 @@ export async function createBoardUrlItem(
   const response = await fetch(`/api/boards/${boardId}/images`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type, url, title: title || url, caption }),
+    body: JSON.stringify({ type, url, title: url, caption }),
   });
 
   return parseJsonResponse<BoardItem>(response);
