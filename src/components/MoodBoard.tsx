@@ -103,7 +103,7 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
 
   useEffect(() => {
     async function handlePaste(event: ClipboardEvent) {
-      if (showAddModal || selectedItem || pendingFiles.length > 0) {
+      if (selectedItem || pendingFiles.length > 0) {
         return;
       }
 
@@ -133,6 +133,7 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
 
       if (imageFiles.length > 0) {
         event.preventDefault();
+        setShowAddModal(false);
         setPendingFiles(imageFiles);
         setCaptions({});
         return;
@@ -149,7 +150,7 @@ export default function MoodBoard({ boardId }: MoodBoardProps) {
 
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [addUrlItem, pendingFiles.length, selectedItem, showAddModal, uploadFiles]);
+  }, [addUrlItem, pendingFiles.length, selectedItem, uploadFiles]);
 
   function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
