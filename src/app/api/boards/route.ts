@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { readBoards, writeBoards, readItems, Board } from "@/lib/storage";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const boards = await readBoards();
 

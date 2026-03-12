@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readBoards, writeBoards, readItems, deleteMetaBlob, del } from "@/lib/storage";
 
+export const dynamic = "force-dynamic";
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
